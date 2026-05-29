@@ -26,6 +26,46 @@ function normalizeTrack(rawTrack?: string): typeof PAY_TRACK {
   throw new Error(`Unsupported track: ${rawTrack}`)
 }
 
+function toSafeNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function toSafeString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value : fallback
+}
+
+function normalizePayload(rawPayload: unknown): ArkivReceiptPayload {
+  const payload = (rawPayload ?? {}) as Record<string, unknown>
+
+  const fechaHora = toSafeString(payload.fechaHora, new Date(0).toISOString())
+  const monedaOrigen = toSafeString(payload.monedaOrigen, "USD") as CurrencyCode
+  const montoUSDC = toSafeNumber(payload.montoUSDC)
+  const montoLiquidadoARS = toSafeNumber(
+    payload.montoLiquidadoARS ?? payload.montoARS,
+    Number((montoUSDC * ARS_PER_USDC).toFixed(2))
+  )
+
+  return {
+    schemaVersion: toSafeString(payload.schemaVersion, RECEIPT_SCHEMA_VERSION) as typeof RECEIPT_SCHEMA_VERSION,
+    transaccionIdStellar: toSafeString(payload.transaccionIdStellar ?? payload.stellarTxId, "stellar-unknown"),
+    hotelId: toSafeString(payload.hotelId, "hotel-unknown"),
+    hotelNombre: toSafeString(payload.hotelNombre ?? payload.hotelName, "Hotel desconocido"),
+    turistaId: toSafeString(payload.turistaId ?? payload.touristId, "tourist-unknown"),
+    turistaOrigen: toSafeString(payload.turistaOrigen ?? payload.touristCountry, "Origen desconocido"),
+    monedaOrigen,
+    montoOriginalFiat: toSafeNumber(payload.montoOriginalFiat ?? payload.montoOrigen),
+    montoUSDC,
+    montoLiquidadoARS,
+    fechaHora,
+    localidad: toSafeString(payload.localidad, "Localidad desconocida"),
+    status: ARKIV_RECEIPT_STATUS,
+    track: PAY_TRACK,
+    rubro: "hotel",
+    receiptHash: typeof payload.receiptHash === "string" ? payload.receiptHash : undefined,
+  }
+}
+
 // POST /api/pay - Process a payment
 export async function POST(request: NextRequest): Promise<NextResponse<PaymentCreateResponse>> {
   try {
@@ -159,23 +199,26 @@ export async function GET(request: NextRequest): Promise<NextResponse<PayListRes
     const queryResult = await queryPayments(filters)
     const entities = queryResult.entities
 
-    // Transform to dashboard rows
-    const items: HotelPaymentRow[] = entities.map((entity) => ({
+    // Transform to dashboard rows (legacy-safe)
+    const items: HotelPaymentRow[] = entities.map((entity) => {
+      const normalizedPayload = normalizePayload(entity.payload)
+
+      return {
       id: entity.id,
       txHash: entity.txHash,
-      hora: new Date(entity.payload.fechaHora).toLocaleTimeString("es-AR", {
+      hora: new Date(normalizedPayload.fechaHora).toLocaleTimeString("es-AR", {
         hour: "2-digit",
         minute: "2-digit",
       }),
-      turistaId: entity.payload.turistaId,
-      turistaOrigen: entity.payload.turistaOrigen,
-      monedaOrigen: entity.payload.monedaOrigen,
-      montoOriginalFiat: entity.payload.montoOriginalFiat,
-      montoUSDC: entity.payload.montoUSDC,
-      montoLiquidadoARS: entity.payload.montoLiquidadoARS,
-      status: entity.payload.status,
-      payload: entity.payload,
-    }))
+      turistaId: normalizedPayload.turistaId,
+      turistaOrigen: normalizedPayload.turistaOrigen,
+      monedaOrigen: normalizedPayload.monedaOrigen,
+      montoOriginalFiat: normalizedPayload.montoOriginalFiat,
+      montoUSDC: normalizedPayload.montoUSDC,
+      montoLiquidadoARS: normalizedPayload.montoLiquidadoARS,
+      status: normalizedPayload.status,
+      payload: normalizedPayload,
+    }})
 
     // Calculate totals
     const totals = items.reduce(
