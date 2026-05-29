@@ -85,20 +85,20 @@ export function ReceiptModal({ payment, open, onOpenChange }: ReceiptModalProps)
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-muted-foreground">Hotel</p>
-              <p className="font-medium">{payment.payload.hotelName}</p>
+              <p className="font-medium">{payment.payload.hotelNombre}</p>
             </div>
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-muted-foreground">Turista</p>
-              <p className="font-medium">{payment.payload.touristName}</p>
+              <p className="font-medium">{payment.payload.turistaId}</p>
             </div>
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-muted-foreground">Monto Original</p>
-              <p className="font-medium">{payment.payload.montoOrigen} {payment.payload.monedaOrigen}</p>
+              <p className="font-medium">{payment.payload.montoOriginalFiat} {payment.payload.monedaOrigen}</p>
             </div>
             <div className="p-3 rounded-lg bg-emerald-50">
               <p className="text-emerald-700">ARS Liquidado</p>
               <p className="font-medium text-emerald-700">
-                ${payment.payload.montoARS.toLocaleString("es-AR")}
+                ${payment.payload.montoLiquidadoARS.toLocaleString("es-AR")}
               </p>
             </div>
           </div>

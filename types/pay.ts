@@ -1,48 +1,59 @@
-// Currency codes supported
-export type CurrencyCode = "USD" | "BRL" | "ARS" | "CRYPTO"
+export type CurrencyCode = "ARS" | "USD" | "BRL" | "USDC" | "CRYPTO"
 
-// Track identifier for Arkiv - MUST be consistent everywhere
 export const PAY_TRACK = "salta-pay-tourist" as const
 export type PayTrack = typeof PAY_TRACK
 
-// Payment status
-export type PaymentStatus = "pending" | "processing" | "confirmed" | "failed"
+export const ARKIV_RECEIPT_STATUS = "liquidado" as const
+export type ArkivReceiptStatus = typeof ARKIV_RECEIPT_STATUS
 
-// Hotel context (hardcoded for demo)
+export const STELLAR_NETWORK = "stellar-testnet-mock" as const
+export const RECEIPT_SCHEMA_VERSION = "1.0.0" as const
+
+export type PaymentStatus =
+  | "draft"
+  | "quoting"
+  | "stellar_simulated"
+  | "arkiv_signing"
+  | "confirmed"
+  | "failed"
+
 export interface HotelContext {
   hotelId: string
-  hotelName: string
+  hotelNombre: string
   localidad: string
-  provincia: string
+  rubro: "hotel"
 }
 
-// Tourist context
 export interface TouristContext {
-  touristId: string
-  displayName: string
-  country: string
+  turistaId: string
+  turistaOrigen: string
+  monedaOrigen: CurrencyCode
 }
 
-// Payment quote request/response
 export interface PaymentQuoteRequest {
-  sourceCurrency: CurrencyCode
-  sourceAmount: number
+  track: PayTrack
+  hotel: HotelContext
+  turista: TouristContext
+  montoARS: number
 }
 
 export interface PaymentQuoteResponse {
+  track: PayTrack
+  quoteId: string
   sourceCurrency: CurrencyCode
   sourceAmount: number
   targetCurrency: "USDC"
   targetAmount: number
   rateUsed: number
   feeEstimate: number
-  arsLiquidation: number
+  estimatedARS: number
+  status: "quoting"
+  expiresAt: string
 }
 
-// Stellar mock transaction
 export interface StellarMockTransaction {
   transactionId: string
-  network: "stellar-testnet-mock"
+  network: typeof STELLAR_NETWORK
   sourceCurrency: CurrencyCode
   sourceAmount: number
   targetCurrency: "USDC"
@@ -53,27 +64,25 @@ export interface StellarMockTransaction {
   createdAt: string
 }
 
-// Arkiv receipt payload (stored on-chain)
 export interface ArkivReceiptPayload {
-  track: PayTrack
+  schemaVersion: typeof RECEIPT_SCHEMA_VERSION
+  transaccionIdStellar: string
   hotelId: string
-  hotelName: string
-  localidad: string
-  touristId: string
-  touristName: string
-  touristCountry: string
+  hotelNombre: string
+  turistaId: string
+  turistaOrigen: string
   monedaOrigen: CurrencyCode
-  montoOrigen: number
+  montoOriginalFiat: number
   montoUSDC: number
-  montoARS: number
-  cotizacion: number
-  stellarTxId: string
-  status: PaymentStatus
+  montoLiquidadoARS: number
   fechaHora: string
+  localidad: string
+  status: ArkivReceiptStatus
+  track: PayTrack
   rubro: "hotel"
+  receiptHash?: string
 }
 
-// Arkiv entity response
 export interface ArkivEntity {
   id: string
   txHash: string
@@ -82,62 +91,78 @@ export interface ArkivEntity {
   createdAt: string
 }
 
-// API request/response types
 export interface PaymentCreateRequest {
+  track?: PayTrack
+  quoteId?: string
   hotel: HotelContext
-  tourist: TouristContext
+  turista: TouristContext
+  montoARS: number
   sourceCurrency: CurrencyCode
-  sourceAmount: number
+  sourceAmount?: number
+  context?: Record<string, string>
 }
 
 export interface PaymentCreateResponse {
-  success: boolean
+  status: "confirmed" | "failed"
+  track: PayTrack
+  stellar?: StellarMockTransaction
+  arkiv?: {
+    txHash: string
+    entityId: string
+    confirmedAt: string
+  }
+  receipt?: ArkivReceiptPayload
+  uiMessage: string
+  error?: string
+  success?: boolean
   txHash?: string
   entityId?: string
-  receipt?: ArkivReceiptPayload
-  error?: string
 }
 
-// Hotel dashboard row
+export interface PaymentListFilters {
+  track?: PayTrack
+  hotelId?: string
+  localidad?: string
+  status?: ArkivReceiptStatus
+  monedaOrigen?: CurrencyCode
+  limit?: number
+  cursor?: string
+}
+
 export interface HotelPaymentRow {
   id: string
   txHash: string
   hora: string
-  touristName: string
-  touristCountry: string
+  turistaId: string
+  turistaOrigen: string
   monedaOrigen: CurrencyCode
-  montoOrigen: number
+  montoOriginalFiat: number
   montoUSDC: number
-  montoARS: number
-  status: PaymentStatus
+  montoLiquidadoARS: number
+  status: ArkivReceiptStatus
   payload: ArkivReceiptPayload
 }
 
-// API list response
 export interface PayListResponse {
-  payments: HotelPaymentRow[]
-  totals: {
+  track: PayTrack
+  items: HotelPaymentRow[]
+  totalARS: number
+  totalPayments: number
+  nextCursor?: string
+  payments?: HotelPaymentRow[]
+  totals?: {
     totalARS: number
     totalUSDC: number
     count: number
   }
 }
 
-// Stepper step definition
-export interface StepperStep {
-  id: number
-  label: string
-  sublabel?: string
-  icon: string
-}
-
-// Exchange rates (demo)
 export const EXCHANGE_RATES: Record<CurrencyCode, number> = {
+  ARS: 0.001,
   USD: 1.0,
   BRL: 0.18,
-  ARS: 0.001,
+  USDC: 1.0,
   CRYPTO: 1.0,
 }
 
-// ARS per USDC rate (demo)
 export const ARS_PER_USDC = 1250

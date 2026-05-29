@@ -7,12 +7,13 @@ import { EXCHANGE_RATES, ARS_PER_USDC } from "@/types/pay"
 
 interface ConversionCardProps {
   sourceCurrency: CurrencyCode
-  sourceAmount: number
+  montoARS: number
 }
 
-export function ConversionCard({ sourceCurrency, sourceAmount }: ConversionCardProps) {
+export function ConversionCard({ sourceCurrency, montoARS }: ConversionCardProps) {
   const rate = EXCHANGE_RATES[sourceCurrency]
-  const usdcAmount = sourceAmount * rate
+  const usdcAmount = montoARS / ARS_PER_USDC
+  const sourceAmount = usdcAmount / rate
   const feeEstimate = usdcAmount * 0.005
   const netUsdc = usdcAmount - feeEstimate
   const arsAmount = netUsdc * ARS_PER_USDC
@@ -21,6 +22,7 @@ export function ConversionCard({ sourceCurrency, sourceAmount }: ConversionCardP
     USD: "$",
     BRL: "R$",
     ARS: "$",
+    USDC: "",
     CRYPTO: "",
   }
 

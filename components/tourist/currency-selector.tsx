@@ -12,6 +12,7 @@ import type { CurrencyCode } from "@/types/pay"
 const currencies: { code: CurrencyCode; label: string; flag: string }[] = [
   { code: "BRL", label: "Real Brasileno", flag: "BR" },
   { code: "USD", label: "Dolar Estadounidense", flag: "US" },
+  { code: "USDC", label: "USD Coin", flag: "UC" },
   { code: "ARS", label: "Peso Argentino", flag: "AR" },
   { code: "CRYPTO", label: "Cripto (USDC)", flag: "CC" },
 ]

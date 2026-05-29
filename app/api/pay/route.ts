@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createHash } from "node:crypto"
 import { simulateStellarPayment } from "@/lib/stellar-mock"
 import { writeReceipt } from "@/lib/arkiv-write"
 import { queryPayments } from "@/lib/arkiv-read"
 import {
+  ARKIV_RECEIPT_STATUS,
+  EXCHANGE_RATES,
   PAY_TRACK,
   ARS_PER_USDC,
+  RECEIPT_SCHEMA_VERSION,
+  type CurrencyCode,
+  type PaymentListFilters,
   type PaymentCreateRequest,
   type PaymentCreateResponse,
   type PayListResponse,
@@ -12,68 +18,123 @@ import {
   type ArkivReceiptPayload,
 } from "@/types/pay"
 
+function normalizeTrack(rawTrack?: string): typeof PAY_TRACK {
+  if (!rawTrack || rawTrack === PAY_TRACK) {
+    return PAY_TRACK
+  }
+
+  throw new Error(`Unsupported track: ${rawTrack}`)
+}
+
 // POST /api/pay - Process a payment
 export async function POST(request: NextRequest): Promise<NextResponse<PaymentCreateResponse>> {
   try {
     const body: PaymentCreateRequest = await request.json()
+    const track = normalizeTrack(body.track)
 
     // Validate required fields
-    if (!body.hotel?.hotelId || !body.tourist?.touristId || !body.sourceCurrency || !body.sourceAmount) {
+    if (!body.hotel?.hotelId || !body.turista?.turistaId || !body.sourceCurrency || body.montoARS <= 0) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields" },
+        {
+          status: "failed",
+          track,
+          uiMessage: "Datos incompletos para procesar el pago",
+          error: "Missing required fields",
+          success: false,
+        },
         { status: 400 }
       )
     }
 
+    const rateUsed = EXCHANGE_RATES[body.sourceCurrency as CurrencyCode]
+    if (!rateUsed || rateUsed <= 0) {
+      return NextResponse.json(
+        {
+          status: "failed",
+          track,
+          uiMessage: "Moneda no soportada para la demo",
+          error: "Unsupported sourceCurrency",
+          success: false,
+        },
+        { status: 400 }
+      )
+    }
+
+    const desiredUsdc = body.montoARS / ARS_PER_USDC
+    const sourceAmount = body.sourceAmount ?? Number((desiredUsdc / rateUsed).toFixed(2))
+
     // Step 1: Simulate Stellar conversion
     const stellarTx = await simulateStellarPayment({
       sourceCurrency: body.sourceCurrency,
-      sourceAmount: body.sourceAmount,
+      sourceAmount,
     })
 
     if (stellarTx.status !== "confirmed") {
       return NextResponse.json(
-        { success: false, error: "Stellar conversion failed" },
+        {
+          status: "failed",
+          track,
+          stellar: stellarTx,
+          uiMessage: "No se pudo confirmar la conversion en Stellar",
+          error: "Stellar conversion failed",
+          success: false,
+        },
         { status: 500 }
       )
     }
 
     // Step 2: Calculate ARS liquidation amount
-    const montoARS = stellarTx.targetAmount * ARS_PER_USDC
+    const montoLiquidadoARS = Number((stellarTx.targetAmount * ARS_PER_USDC).toFixed(2))
 
     // Step 3: Build Arkiv receipt payload
-    const receipt: ArkivReceiptPayload = {
-      track: PAY_TRACK,
+    const baseReceipt: Omit<ArkivReceiptPayload, "receiptHash"> = {
+      schemaVersion: RECEIPT_SCHEMA_VERSION,
+      transaccionIdStellar: stellarTx.transactionId,
       hotelId: body.hotel.hotelId,
-      hotelName: body.hotel.hotelName,
-      localidad: body.hotel.localidad,
-      touristId: body.tourist.touristId,
-      touristName: body.tourist.displayName,
-      touristCountry: body.tourist.country,
+      hotelNombre: body.hotel.hotelNombre,
+      turistaId: body.turista.turistaId,
+      turistaOrigen: body.turista.turistaOrigen,
       monedaOrigen: body.sourceCurrency,
-      montoOrigen: body.sourceAmount,
+      montoOriginalFiat: sourceAmount,
       montoUSDC: stellarTx.targetAmount,
-      montoARS: Number(montoARS.toFixed(2)),
-      cotizacion: stellarTx.rateUsed,
-      stellarTxId: stellarTx.transactionId,
-      status: "confirmed",
+      montoLiquidadoARS,
       fechaHora: new Date().toISOString(),
+      localidad: body.hotel.localidad,
+      status: ARKIV_RECEIPT_STATUS,
+      track,
       rubro: "hotel",
     }
+    const receiptHash = createHash("sha256").update(JSON.stringify(baseReceipt)).digest("hex")
+    const receipt: ArkivReceiptPayload = { ...baseReceipt, receiptHash }
 
     // Step 4: Write receipt to Arkiv blockchain
     const arkivResult = await writeReceipt(receipt)
 
     return NextResponse.json({
+      status: "confirmed",
+      track,
       success: true,
       txHash: arkivResult.txHash,
       entityId: arkivResult.entityId,
+      stellar: stellarTx,
+      arkiv: {
+        txHash: arkivResult.txHash,
+        entityId: arkivResult.entityId,
+        confirmedAt: new Date().toISOString(),
+      },
       receipt,
+      uiMessage: "Pago procesado con exito y recibo firmado en Arkiv",
     })
   } catch (error) {
     console.error("[API Pay POST] Error:", error)
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      {
+        status: "failed",
+        track: PAY_TRACK,
+        uiMessage: "No se pudo procesar el pago",
+        error: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+      },
       { status: 500 }
     )
   }
@@ -83,44 +144,73 @@ export async function POST(request: NextRequest): Promise<NextResponse<PaymentCr
 export async function GET(request: NextRequest): Promise<NextResponse<PayListResponse>> {
   try {
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get("hotelId") || undefined
+    const track = normalizeTrack(searchParams.get("track") ?? undefined)
+    const filters: PaymentListFilters = {
+      track,
+      hotelId: searchParams.get("hotelId") ?? undefined,
+      localidad: searchParams.get("localidad") ?? undefined,
+      status: (searchParams.get("status") as PaymentListFilters["status"]) ?? undefined,
+      monedaOrigen: (searchParams.get("monedaOrigen") as CurrencyCode) ?? undefined,
+      limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined,
+      cursor: searchParams.get("cursor") ?? undefined,
+    }
 
     // Query Arkiv for payments
-    const entities = await queryPayments(hotelId)
+    const queryResult = await queryPayments(filters)
+    const entities = queryResult.entities
 
     // Transform to dashboard rows
-    const payments: HotelPaymentRow[] = entities.map((entity) => ({
+    const items: HotelPaymentRow[] = entities.map((entity) => ({
       id: entity.id,
       txHash: entity.txHash,
       hora: new Date(entity.payload.fechaHora).toLocaleTimeString("es-AR", {
         hour: "2-digit",
         minute: "2-digit",
       }),
-      touristName: entity.payload.touristName,
-      touristCountry: entity.payload.touristCountry,
+      turistaId: entity.payload.turistaId,
+      turistaOrigen: entity.payload.turistaOrigen,
       monedaOrigen: entity.payload.monedaOrigen,
-      montoOrigen: entity.payload.montoOrigen,
+      montoOriginalFiat: entity.payload.montoOriginalFiat,
       montoUSDC: entity.payload.montoUSDC,
-      montoARS: entity.payload.montoARS,
+      montoLiquidadoARS: entity.payload.montoLiquidadoARS,
       status: entity.payload.status,
       payload: entity.payload,
     }))
 
     // Calculate totals
-    const totals = payments.reduce(
+    const totals = items.reduce(
       (acc, p) => ({
-        totalARS: acc.totalARS + p.montoARS,
+        totalARS: acc.totalARS + p.montoLiquidadoARS,
         totalUSDC: acc.totalUSDC + p.montoUSDC,
         count: acc.count + 1,
       }),
       { totalARS: 0, totalUSDC: 0, count: 0 }
     )
 
-    return NextResponse.json({ payments, totals })
+    return NextResponse.json({
+      track,
+      items,
+      totalARS: Number(totals.totalARS.toFixed(2)),
+      totalPayments: totals.count,
+      nextCursor: queryResult.nextCursor,
+      payments: items,
+      totals: {
+        totalARS: Number(totals.totalARS.toFixed(2)),
+        totalUSDC: Number(totals.totalUSDC.toFixed(2)),
+        count: totals.count,
+      },
+    })
   } catch (error) {
     console.error("[API Pay GET] Error:", error)
     return NextResponse.json(
-      { payments: [], totals: { totalARS: 0, totalUSDC: 0, count: 0 } },
+      {
+        track: PAY_TRACK,
+        items: [],
+        totalARS: 0,
+        totalPayments: 0,
+        payments: [],
+        totals: { totalARS: 0, totalUSDC: 0, count: 0 },
+      },
       { status: 500 }
     )
   }

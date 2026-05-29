@@ -28,7 +28,7 @@ export function SuccessScreen({ txHash, receipt, onReset }: SuccessScreenProps) 
       <div className="text-center">
         <h2 className="text-2xl font-bold text-emerald-700">Pago confirmado!</h2>
         <p className="text-muted-foreground mt-1">
-          El hotel ha recibido ${receipt.montoARS.toLocaleString("es-AR")} ARS
+          El hotel ha recibido ${receipt.montoLiquidadoARS.toLocaleString("es-AR")} ARS
         </p>
       </div>
 
@@ -64,15 +64,15 @@ export function SuccessScreen({ txHash, receipt, onReset }: SuccessScreenProps) 
         <CardContent className="p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Turista</span>
-            <span>{receipt.touristName}</span>
+            <span>{receipt.turistaId}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Hotel</span>
-            <span>{receipt.hotelName}</span>
+            <span>{receipt.hotelNombre}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Monto pagado</span>
-            <span>{receipt.montoOrigen} {receipt.monedaOrigen}</span>
+            <span>{receipt.montoOriginalFiat} {receipt.monedaOrigen}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">USDC convertido</span>
@@ -80,7 +80,7 @@ export function SuccessScreen({ txHash, receipt, onReset }: SuccessScreenProps) 
           </div>
           <div className="flex justify-between text-sm font-medium">
             <span>ARS liquidado</span>
-            <span className="text-emerald-600">${receipt.montoARS.toLocaleString("es-AR")}</span>
+            <span className="text-emerald-600">${receipt.montoLiquidadoARS.toLocaleString("es-AR")}</span>
           </div>
         </CardContent>
       </Card>

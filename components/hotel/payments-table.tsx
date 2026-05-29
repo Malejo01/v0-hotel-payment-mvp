@@ -16,10 +16,18 @@ import type { HotelPaymentRow } from "@/types/pay"
 interface PaymentsTableProps {
   payments: HotelPaymentRow[]
   isLoading: boolean
+  emptyTitle?: string
+  emptyDescription?: string
   onRowClick: (payment: HotelPaymentRow) => void
 }
 
-export function PaymentsTable({ payments, isLoading, onRowClick }: PaymentsTableProps) {
+export function PaymentsTable({
+  payments,
+  isLoading,
+  emptyTitle = "No hay pagos registrados",
+  emptyDescription = "Los pagos confirmados apareceran aqui",
+  onRowClick,
+}: PaymentsTableProps) {
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -34,10 +42,8 @@ export function PaymentsTable({ payments, isLoading, onRowClick }: PaymentsTable
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Shield className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <p className="text-muted-foreground">No hay pagos registrados</p>
-        <p className="text-sm text-muted-foreground/70">
-          Los pagos confirmados apareceran aqui
-        </p>
+        <p className="text-muted-foreground">{emptyTitle}</p>
+        <p className="text-sm text-muted-foreground/70">{emptyDescription}</p>
       </div>
     )
   }
@@ -67,8 +73,8 @@ export function PaymentsTable({ payments, isLoading, onRowClick }: PaymentsTable
               <TableCell className="font-mono text-sm">{payment.hora}</TableCell>
               <TableCell>
                 <div>
-                  <p className="font-medium">{payment.touristName}</p>
-                  <p className="text-xs text-muted-foreground">{payment.touristCountry}</p>
+                  <p className="font-medium">{payment.turistaId}</p>
+                  <p className="text-xs text-muted-foreground">{payment.turistaOrigen}</p>
                 </div>
               </TableCell>
               <TableCell>
@@ -77,20 +83,20 @@ export function PaymentsTable({ payments, isLoading, onRowClick }: PaymentsTable
                 </Badge>
               </TableCell>
               <TableCell className="text-right font-mono">
-                {payment.montoOrigen.toLocaleString()}
+                {payment.montoOriginalFiat.toLocaleString()}
               </TableCell>
               <TableCell className="text-right font-mono text-sky-600">
                 {payment.montoUSDC.toFixed(2)}
               </TableCell>
               <TableCell className="text-right font-mono font-medium text-emerald-600">
-                ${payment.montoARS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                ${payment.montoLiquidadoARS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
               </TableCell>
               <TableCell>
                 <Badge
-                  variant={payment.status === "confirmed" ? "default" : "secondary"}
-                  className={payment.status === "confirmed" ? "bg-emerald-500" : ""}
+                  variant={payment.status === "liquidado" ? "default" : "secondary"}
+                  className={payment.status === "liquidado" ? "bg-emerald-500" : ""}
                 >
-                  {payment.status === "confirmed" ? "Confirmado" : payment.status}
+                  {payment.status === "liquidado" ? "Liquidado" : payment.status}
                 </Badge>
               </TableCell>
               <TableCell>

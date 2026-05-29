@@ -5,11 +5,10 @@ import { DollarSign, CreditCard, Shield } from "lucide-react"
 
 interface MetricsCardsProps {
   totalARS: number
-  totalUSDC: number
   paymentCount: number
 }
 
-export function MetricsCards({ totalARS, totalUSDC, paymentCount }: MetricsCardsProps) {
+export function MetricsCards({ totalARS, paymentCount }: MetricsCardsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Total ARS */}

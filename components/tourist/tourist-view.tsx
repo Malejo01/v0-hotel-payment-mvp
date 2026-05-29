@@ -5,34 +5,40 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
 import { PaymentStepper } from "./payment-stepper"
 import { CurrencySelector } from "./currency-selector"
 import { ConversionCard } from "./conversion-card"
 import { SuccessScreen } from "./success-screen"
-import type { CurrencyCode, HotelContext, TouristContext, PaymentCreateResponse, ArkivReceiptPayload } from "@/types/pay"
+import { ARS_PER_USDC, EXCHANGE_RATES, PAY_TRACK, type CurrencyCode, type HotelContext, type TouristContext, type PaymentCreateResponse, type ArkivReceiptPayload } from "@/types/pay"
 
 // Demo hardcoded contexts
 const DEMO_HOTEL: HotelContext = {
   hotelId: "hotel-salta-001",
-  hotelName: "Hotel Cerro San Bernardo",
+  hotelNombre: "Hotel Cerro San Bernardo",
   localidad: "Salta Capital",
-  provincia: "Salta",
+  rubro: "hotel",
 }
 
 const DEMO_TOURIST: TouristContext = {
-  touristId: "tourist-demo-001",
-  displayName: "Maria Silva",
-  country: "Brasil",
+  turistaId: "tourist-demo-001",
+  turistaOrigen: "Brasil",
+  monedaOrigen: "BRL",
 }
 
 type ViewState = "form" | "processing" | "success"
 
 export function TouristView() {
+  const { toast } = useToast()
   const [viewState, setViewState] = useState<ViewState>("form")
   const [currentStep, setCurrentStep] = useState(1)
   const [sourceCurrency, setSourceCurrency] = useState<CurrencyCode>("BRL")
-  const [sourceAmount, setSourceAmount] = useState<number>(500)
+  const [montoARS, setMontoARS] = useState<number>(125000)
   const [result, setResult] = useState<{ txHash: string; receipt: ArkivReceiptPayload } | null>(null)
+
+  const requiredUsdc = montoARS / ARS_PER_USDC
+  const selectedRate = EXCHANGE_RATES[sourceCurrency]
+  const estimatedSourceAmount = Number((requiredUsdc / selectedRate).toFixed(2))
 
   const handleSubmit = async () => {
     setViewState("processing")
@@ -48,10 +54,15 @@ export function TouristView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          track: PAY_TRACK,
           hotel: DEMO_HOTEL,
-          tourist: DEMO_TOURIST,
+          turista: {
+            ...DEMO_TOURIST,
+            monedaOrigen: sourceCurrency,
+          },
+          montoARS,
           sourceCurrency,
-          sourceAmount,
+          sourceAmount: estimatedSourceAmount,
         }),
       })
 
@@ -60,11 +71,15 @@ export function TouristView() {
 
       const data: PaymentCreateResponse = await response.json()
 
-      if (data.success && data.txHash && data.receipt) {
+      if (response.ok && data.status === "confirmed" && data.arkiv?.txHash && data.receipt) {
         setCurrentStep(5)
         await new Promise((r) => setTimeout(r, 500))
-        setResult({ txHash: data.txHash, receipt: data.receipt })
+        setResult({ txHash: data.arkiv.txHash, receipt: data.receipt })
         setViewState("success")
+        toast({
+          title: "Pago confirmado",
+          description: data.uiMessage,
+        })
       } else {
         throw new Error(data.error || "Payment failed")
       }
@@ -72,14 +87,18 @@ export function TouristView() {
       console.error("Payment error:", error)
       setViewState("form")
       setCurrentStep(1)
-      // In a real app, show error toast
+      toast({
+        title: "Error al procesar pago",
+        description: error instanceof Error ? error.message : "Ocurrio un error inesperado",
+        variant: "destructive",
+      })
     }
   }
 
   const handleReset = () => {
     setViewState("form")
     setCurrentStep(1)
-    setSourceAmount(500)
+    setMontoARS(125000)
     setResult(null)
   }
 
@@ -91,8 +110,8 @@ export function TouristView() {
     <div className="flex flex-col gap-6 p-4 max-w-md mx-auto">
       {/* Hotel info header */}
       <div className="text-center">
-        <h2 className="text-lg font-semibold">{DEMO_HOTEL.hotelName}</h2>
-        <p className="text-sm text-muted-foreground">{DEMO_HOTEL.localidad}, {DEMO_HOTEL.provincia}</p>
+        <h2 className="text-lg font-semibold">{DEMO_HOTEL.hotelNombre}</h2>
+        <p className="text-sm text-muted-foreground">{DEMO_HOTEL.localidad}</p>
       </div>
 
       {/* Stepper */}
@@ -111,7 +130,7 @@ export function TouristView() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Datos del pago</CardTitle>
-              <CardDescription>Selecciona tu moneda y monto a pagar</CardDescription>
+                <CardDescription>Monto ARS definido por recepcion y moneda de origen del turista</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -122,12 +141,12 @@ export function TouristView() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount">Monto a pagar</Label>
+                <Label htmlFor="ars-amount">Monto en ARS (recepcion)</Label>
                 <Input
-                  id="amount"
+                  id="ars-amount"
                   type="number"
-                  value={sourceAmount}
-                  onChange={(e) => setSourceAmount(Number(e.target.value))}
+                  value={montoARS}
+                  onChange={(e) => setMontoARS(Number(e.target.value))}
                   min={1}
                   className="text-lg font-mono"
                 />
@@ -136,14 +155,14 @@ export function TouristView() {
           </Card>
 
           {/* Conversion preview */}
-          <ConversionCard sourceCurrency={sourceCurrency} sourceAmount={sourceAmount} />
+          <ConversionCard sourceCurrency={sourceCurrency} montoARS={montoARS} />
 
           {/* Submit button */}
           <Button
             size="lg"
             className="w-full bg-sky-600 hover:bg-sky-700"
             onClick={handleSubmit}
-            disabled={sourceAmount <= 0}
+            disabled={montoARS <= 0}
           >
             Confirmar Pago
           </Button>
@@ -164,7 +183,7 @@ export function TouristView() {
 
       {/* Tourist info footer */}
       <div className="text-center text-sm text-muted-foreground">
-        <p>Turista: {DEMO_TOURIST.displayName} ({DEMO_TOURIST.country})</p>
+        <p>Turista: {DEMO_TOURIST.turistaId} ({DEMO_TOURIST.turistaOrigen})</p>
       </div>
     </div>
   )

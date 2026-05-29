@@ -23,6 +23,7 @@ export async function writeReceipt(payload: ArkivReceiptPayload): Promise<{
   entityId: string
 }> {
   const walletClient = createArkivWalletClient()
+  const fechaTs = Date.parse(payload.fechaHora)
 
   const result = await walletClient.createEntity({
     payload: jsonToPayload(payload),
@@ -35,6 +36,7 @@ export async function writeReceipt(payload: ArkivReceiptPayload): Promise<{
       { key: "rubro", value: payload.rubro },
       { key: "monedaOrigen", value: payload.monedaOrigen },
       { key: "fecha", value: payload.fechaHora },
+      { key: "fechaTs", value: Number.isFinite(fechaTs) ? String(fechaTs) : String(Date.now()) },
     ],
     expiresIn: ExpirationTime.fromDays(365), // 1 year for demo
   })
