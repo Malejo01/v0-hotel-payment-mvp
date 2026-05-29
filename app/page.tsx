@@ -6,35 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SaltaPayHeader } from '@/components/saltapay-header'
 import { TouristView } from '@/components/tourist-view'
 import { HotelPanel } from '@/components/hotel-panel'
-import { randomTxHash, type PaymentRecord } from '@/lib/saltapay'
-
-const SEED_PAYMENTS: PaymentRecord[] = [
-  {
-    id: 'seed-1',
-    tourist: 'tourist-eu-882',
-    origin: 'EUR',
-    originAmount: 138.89,
-    usdcNet: 149.63,
-    arsReceived: 187031,
-    status: 'liquidado',
-    timestamp: Date.now() - 1000 * 60 * 42,
-    txHash: randomTxHash(),
-  },
-  {
-    id: 'seed-2',
-    tourist: 'tourist-us-104',
-    origin: 'USD',
-    originAmount: 80,
-    usdcNet: 79.8,
-    arsReceived: 99750,
-    status: 'liquidado',
-    timestamp: Date.now() - 1000 * 60 * 60 * 3,
-    txHash: randomTxHash(),
-  },
-]
+import type { PaymentRecord } from '@/lib/saltapay'
 
 export default function Page() {
-  const [payments, setPayments] = useState<PaymentRecord[]>(SEED_PAYMENTS)
+  const [payments, setPayments] = useState<PaymentRecord[]>([])
 
   function handlePaymentComplete(record: PaymentRecord) {
     setPayments((prev) => [record, ...prev])

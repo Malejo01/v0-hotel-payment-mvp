@@ -3,10 +3,11 @@ import {
   fetchHotelPayments,
   executePayment,
   checkNetworkStatus,
+  validateStellarConfig,
+  getHotelPublicKey,
   type PaymentRequest,
   type StellarPaymentReceipt,
   type HotelStats,
-  HOTEL_PUBLIC_KEY,
 } from '@/lib/stellar'
 import { ARS_PER_USDC } from '@/lib/saltapay'
 
@@ -14,6 +15,16 @@ export const dynamic = 'force-dynamic'
 
 // GET: Fetch payment history from Horizon (the ledger IS the database)
 export async function GET() {
+  // Validate Stellar configuration
+  const config = validateStellarConfig()
+  if (!config.valid) {
+    return NextResponse.json({
+      success: false,
+      error: `Missing environment variables: ${config.missing.join(', ')}`,
+      configError: true,
+    }, { status: 500 })
+  }
+
   try {
     const [payments, networkStatus] = await Promise.all([
       fetchHotelPayments(),
@@ -33,7 +44,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      hotelPublicKey: HOTEL_PUBLIC_KEY,
+      hotelPublicKey: getHotelPublicKey(),
       payments,
       stats,
     })
@@ -51,6 +62,16 @@ export async function GET() {
 
 // POST: Execute a payment on Stellar Testnet
 export async function POST(request: NextRequest) {
+  // Validate Stellar configuration
+  const config = validateStellarConfig()
+  if (!config.valid) {
+    return NextResponse.json({
+      success: false,
+      error: `Missing environment variables: ${config.missing.join(', ')}`,
+      configError: true,
+    }, { status: 500 })
+  }
+
   try {
     const body = (await request.json()) as PaymentRequest
 

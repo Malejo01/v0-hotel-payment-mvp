@@ -37,6 +37,7 @@ interface HotelPanelProps {
 export function HotelPanel({ payments: localPayments, hotelPublicKey }: HotelPanelProps) {
   const [horizonPayments, setHorizonPayments] = useState<StellarPaymentReceipt[]>([])
   const [stats, setStats] = useState<HotelStats | null>(null)
+  const [apiPublicKey, setApiPublicKey] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -47,6 +48,9 @@ export function HotelPanel({ payments: localPayments, hotelPublicKey }: HotelPan
       if (data.success) {
         setHorizonPayments(data.payments)
         setStats(data.stats)
+        if (data.hotelPublicKey) {
+          setApiPublicKey(data.hotelPublicKey)
+        }
       }
     } catch (error) {
       console.error('[v0] Error fetching from Horizon:', error)
@@ -81,7 +85,7 @@ export function HotelPanel({ payments: localPayments, hotelPublicKey }: HotelPan
   const paymentCount = localPayments.length + horizonPayments.length
 
   const networkConnected = stats?.networkStatus === 'connected'
-  const publicKey = hotelPublicKey || 'GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI'
+  const publicKey = apiPublicKey || hotelPublicKey || ''
 
   return (
     <div className="flex flex-col gap-5">

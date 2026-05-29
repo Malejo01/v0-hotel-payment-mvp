@@ -4,14 +4,26 @@ import * as StellarSdk from '@stellar/stellar-sdk'
 export const HORIZON_URL = 'https://horizon-testnet.stellar.org'
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET
 
-// Hotel's Stellar account (testnet)
-// In production, this would be securely stored
-export const HOTEL_PUBLIC_KEY = 'GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI'
-export const HOTEL_SECRET_KEY = 'SC5O7VZUXDJ6JBDSZ74DSERBER6RJAFSTBMLWMQZ5EVSYDNQBSMM2VQSP'
+// Get hotel public key from environment (read at runtime)
+export function getHotelPublicKey(): string {
+  return process.env.STELLAR_HOTEL_PUBLIC_KEY || ''
+}
 
-// Demo tourist account (testnet)
-export const TOURIST_PUBLIC_KEY = 'GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOUJ3DCKRJQHQYQV'
-export const TOURIST_SECRET_KEY = 'SCZANGBA5YHTNYVVV3C7CAZMTQDBJHP5HPCBQJQMZJUWFGZTD5O3MDJX'
+// Get tourist secret key from environment (read at runtime)
+export function getTouristSecretKey(): string {
+  return process.env.STELLAR_TOURIST_SECRET_KEY || ''
+}
+
+// For backwards compatibility (but reads dynamically now)
+export const HOTEL_PUBLIC_KEY = process.env.STELLAR_HOTEL_PUBLIC_KEY || ''
+
+// Validate that required env vars are set
+export function validateStellarConfig(): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  if (!process.env.STELLAR_HOTEL_PUBLIC_KEY) missing.push('STELLAR_HOTEL_PUBLIC_KEY')
+  if (!process.env.STELLAR_TOURIST_SECRET_KEY) missing.push('STELLAR_TOURIST_SECRET_KEY')
+  return { valid: missing.length === 0, missing }
+}
 
 // Asset codes used in the demo
 export const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
@@ -53,11 +65,17 @@ export function getHorizonServer() {
 // Fetch payments for hotel account from Horizon
 export async function fetchHotelPayments(): Promise<StellarPaymentReceipt[]> {
   const server = getHorizonServer()
+  const hotelKey = getHotelPublicKey()
+  
+  if (!hotelKey) {
+    console.error('[Stellar] STELLAR_HOTEL_PUBLIC_KEY not configured')
+    return []
+  }
   
   try {
     const payments = await server
       .payments()
-      .forAccount(HOTEL_PUBLIC_KEY)
+      .forAccount(hotelKey)
       .order('desc')
       .limit(50)
       .call()
@@ -71,7 +89,7 @@ export async function fetchHotelPayments(): Promise<StellarPaymentReceipt[]> {
       }
       
       // Skip outgoing payments
-      if (record.from === HOTEL_PUBLIC_KEY) {
+      if (record.from === hotelKey) {
         continue
       }
       
@@ -102,9 +120,15 @@ export async function fetchHotelPayments(): Promise<StellarPaymentReceipt[]> {
 // Execute a payment on Stellar Testnet
 export async function executePayment(request: PaymentRequest): Promise<StellarPaymentReceipt> {
   const server = getHorizonServer()
+  const hotelKey = getHotelPublicKey()
+  const touristSecret = getTouristSecretKey()
+  
+  if (!hotelKey || !touristSecret) {
+    throw new Error('Stellar keys not configured')
+  }
   
   // Load tourist account
-  const touristKeypair = StellarSdk.Keypair.fromSecret(TOURIST_SECRET_KEY)
+  const touristKeypair = StellarSdk.Keypair.fromSecret(touristSecret)
   const touristAccount = await server.loadAccount(touristKeypair.publicKey())
   
   // Build the transaction
@@ -115,7 +139,7 @@ export async function executePayment(request: PaymentRequest): Promise<StellarPa
   })
     .addOperation(
       StellarSdk.Operation.payment({
-        destination: HOTEL_PUBLIC_KEY,
+        destination: hotelKey,
         asset: StellarSdk.Asset.native(),
         amount: request.usdcAmount.toFixed(7), // XLM amount (simulating USDC)
       })
@@ -135,7 +159,7 @@ export async function executePayment(request: PaymentRequest): Promise<StellarPa
     ledgerNumber: result.ledger,
     createdAt: new Date().toISOString(),
     sourceAccount: touristKeypair.publicKey(),
-    destinationAccount: HOTEL_PUBLIC_KEY,
+    destinationAccount: hotelKey,
     sourceAsset: request.originCurrency,
     sourceAmount: request.originAmount.toString(),
     destinationAsset: 'USDC',
