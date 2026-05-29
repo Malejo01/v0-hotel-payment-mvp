@@ -4,22 +4,14 @@ export function SaltaPayHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-4 py-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center">
           <Image 
-            src="/logo.jpeg" 
+            src="/logo.png" 
             alt="SaltaPay Logo" 
-            width={40} 
-            height={40} 
-            className="size-10 rounded-lg"
+            width={180} 
+            height={48} 
+            className="h-40 w-auto rounded-lg object-contain"
           />
-          <div className="leading-tight">
-            <p className="text-base font-extrabold tracking-tight text-foreground">
-              SaltaPay
-            </p>
-            <p className="text-xs font-medium text-muted-foreground">
-              Pagos sobre Stellar
-            </p>
-          </div>
         </div>
         <div className="text-right leading-tight">
           <p className="text-xs font-medium text-muted-foreground">
