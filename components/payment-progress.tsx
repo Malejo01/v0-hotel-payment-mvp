@@ -3,28 +3,43 @@
 import { Coins, CreditCard, Zap, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export const PAYMENT_STEPS = [
+export const DEFAULT_STEPS = [
   { id: 0, label: 'Seleccionando moneda', hint: 'Elegí tu moneda de origen', icon: Coins },
-  { id: 1, label: 'Confirmando pago', hint: 'Revisá la conversión estimada', icon: CreditCard },
-  { id: 2, label: 'Validando en Stellar', hint: 'Verificación de fondos (testnet)', icon: Zap },
-  { id: 3, label: 'Firmando transacción', hint: 'Firma criptográfica de la operación', icon: ShieldCheck },
-  { id: 4, label: 'Pago procesado', hint: 'El hotel recibió los pesos', icon: CheckCircle2 },
+  { id: 1, label: 'Cotizando ruta óptima', hint: 'Buscando el mejor path en Stellar', icon: CreditCard },
+  { id: 2, label: 'Firmando transacción', hint: 'Firma criptográfica en Testnet', icon: ShieldCheck },
+  { id: 3, label: '¡Pago procesado!', hint: 'El hotel recibió los pesos', icon: CheckCircle2 },
 ] as const
 
 export function PaymentProgress({
   current,
   processing,
+  labels,
 }: {
   current: number
   processing: boolean
+  labels?: string[]
 }) {
+  const steps = labels
+    ? labels.map((label, i) => ({
+        id: i,
+        label,
+        hint: '',
+        icon: i === labels.length - 1 ? CheckCircle2 : DEFAULT_STEPS[Math.min(i, DEFAULT_STEPS.length - 1)]?.icon || Zap,
+      }))
+    : DEFAULT_STEPS
+
+  const displaySteps = [
+    { id: 0, label: 'Seleccionando moneda', hint: 'Elegí tu moneda de origen', icon: Coins },
+    ...steps.map((s, i) => ({ ...s, id: i + 1 })),
+  ]
+
   return (
     <ol className="flex flex-col gap-1">
-      {PAYMENT_STEPS.map((step, i) => {
+      {displaySteps.map((step, i) => {
         const done = i < current
         const active = i === current
         const Icon = step.icon
-        const isLast = i === PAYMENT_STEPS.length - 1
+        const isLast = i === displaySteps.length - 1
         return (
           <li key={step.id} className="flex gap-3">
             <div className="flex flex-col items-center">
@@ -63,7 +78,7 @@ export function PaymentProgress({
               >
                 {step.label}
               </p>
-              <p className="text-xs text-muted-foreground">{step.hint}</p>
+              {step.hint && <p className="text-xs text-muted-foreground">{step.hint}</p>}
             </div>
           </li>
         )
