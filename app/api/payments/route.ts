@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   fetchHotelPayments,
-  executePayment,
+  createSep7PaymentIntent,
   checkNetworkStatus,
-  validateStellarConfig,
+  validateHotelConfig,
+  validatePaymentIntentConfig,
   getHotelPublicKey,
   type PaymentRequest,
-  type StellarPaymentReceipt,
+  type StellarPaymentIntent,
   type HotelStats,
 } from '@/lib/stellar'
 import { ARS_PER_USDC } from '@/lib/saltapay'
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
 // GET: Fetch payment history from Horizon (the ledger IS the database)
 export async function GET() {
   // Validate Stellar configuration
-  const config = validateStellarConfig()
+  const config = validateHotelConfig()
   if (!config.valid) {
     return NextResponse.json({
       success: false,
@@ -60,20 +61,21 @@ export async function GET() {
   }
 }
 
-// POST: Execute a payment on Stellar Testnet
+// POST: Build a SEP-0007 payment intent for external wallet signing
 export async function POST(request: NextRequest) {
-  // Validate Stellar configuration
-  const config = validateStellarConfig()
-  if (!config.valid) {
-    return NextResponse.json({
-      success: false,
-      error: `Missing environment variables: ${config.missing.join(', ')}`,
-      configError: true,
-    }, { status: 500 })
-  }
-
   try {
     const body = (await request.json()) as PaymentRequest
+
+    // Validate Stellar configuration after reading the request so the source account
+    // can come from the tourist wallet instead of only from env.
+    const config = validatePaymentIntentConfig()
+    if (!config.valid && !body.sourceAccount) {
+      return NextResponse.json({
+        success: false,
+        error: `Missing environment variables: ${config.missing.join(', ')}`,
+        configError: true,
+      }, { status: 500 })
+    }
 
     // Validate request
     if (!body.arsAmount || body.arsAmount <= 0) {
@@ -90,20 +92,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Execute the payment on Stellar Testnet
-    const receipt: StellarPaymentReceipt = await executePayment(body)
+    if (!body.sourceAccount && !body.sessionId) {
+      return NextResponse.json(
+        { success: false, error: 'Missing tourist source account' },
+        { status: 400 }
+      )
+    }
+
+    // Build unsigned tx intent for external wallet signing (SEP-7)
+    const intent: StellarPaymentIntent = await createSep7PaymentIntent(body)
 
     return NextResponse.json({
       success: true,
-      receipt,
-      explorerUrl: `https://stellar.expert/explorer/testnet/tx/${receipt.transactionHash}`,
+      intent,
     })
   } catch (error) {
-    console.error('[API] Error executing payment:', error)
+    console.error('[API] Error preparing payment intent:', error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Payment failed',
+        error: error instanceof Error ? error.message : 'Payment intent failed',
       },
       { status: 500 }
     )

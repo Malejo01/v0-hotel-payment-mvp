@@ -13,6 +13,7 @@ import {
   type PaymentRecord,
 } from '@/lib/saltapay'
 import type { StellarPaymentReceipt, HotelStats } from '@/lib/stellar'
+import { HotelPaymentRequest } from '@/components/hotel-payment-request'
 
 function badgeFor(code: string) {
   return CURRENCIES.find((c) => c.code === code)?.badge ?? code.slice(0, 2)
@@ -139,6 +140,8 @@ export function HotelPanel({ payments: localPayments, hotelPublicKey }: HotelPan
           <span className="ml-2">· liquidación instantánea 24/7</span>
         </div>
       </Card>
+
+      <HotelPaymentRequest />
 
       {/* Transactions */}
       <Card className="p-5">

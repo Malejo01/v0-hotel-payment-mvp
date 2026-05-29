@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createHash } from "node:crypto"
 import { simulateStellarPayment } from "@/lib/stellar-mock"
-import { writeReceipt } from "@/lib/arkiv-write"
 import { queryPayments } from "@/lib/arkiv-read"
+import { persistHotelReceipt } from "@/lib/payment-receipts"
 import {
   ARKIV_RECEIPT_STATUS,
   EXCHANGE_RATES,
@@ -123,43 +122,30 @@ export async function POST(request: NextRequest): Promise<NextResponse<PaymentCr
       )
     }
 
-    // Step 2: Calculate ARS liquidation amount
-    const montoLiquidadoARS = Number((stellarTx.targetAmount * ARS_PER_USDC).toFixed(2))
-
-    // Step 3: Build Arkiv receipt payload
-    const baseReceipt: Omit<ArkivReceiptPayload, "receiptHash"> = {
-      schemaVersion: RECEIPT_SCHEMA_VERSION,
-      transaccionIdStellar: stellarTx.transactionId,
+    // Step 2: Persist the receipt through the shared confirmation helper
+    const { receipt, arkiv } = await persistHotelReceipt({
+      transactionHash: stellarTx.transactionId,
+      touristId: body.turista.turistaId,
+      touristOrigin: body.turista.turistaOrigen,
       hotelId: body.hotel.hotelId,
       hotelNombre: body.hotel.hotelNombre,
-      turistaId: body.turista.turistaId,
-      turistaOrigen: body.turista.turistaOrigen,
-      monedaOrigen: body.sourceCurrency,
-      montoOriginalFiat: sourceAmount,
-      montoUSDC: stellarTx.targetAmount,
-      montoLiquidadoARS,
-      fechaHora: new Date().toISOString(),
       localidad: body.hotel.localidad,
-      status: ARKIV_RECEIPT_STATUS,
+      sourceCurrency: body.sourceCurrency,
+      sourceAmount,
+      receivedAmount: stellarTx.targetAmount,
       track,
-      rubro: "hotel",
-    }
-    const receiptHash = createHash("sha256").update(JSON.stringify(baseReceipt)).digest("hex")
-    const receipt: ArkivReceiptPayload = { ...baseReceipt, receiptHash }
-
-    // Step 4: Write receipt to Arkiv blockchain
-    const arkivResult = await writeReceipt(receipt)
+    })
 
     return NextResponse.json({
       status: "confirmed",
       track,
       success: true,
-      txHash: arkivResult.txHash,
-      entityId: arkivResult.entityId,
+      txHash: arkiv.txHash,
+      entityId: arkiv.entityId,
       stellar: stellarTx,
       arkiv: {
-        txHash: arkivResult.txHash,
-        entityId: arkivResult.entityId,
+        txHash: arkiv.txHash,
+        entityId: arkiv.entityId,
         confirmedAt: new Date().toISOString(),
       },
       receipt,

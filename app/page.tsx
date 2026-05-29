@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Smartphone, Building2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card } from '@/components/ui/card'
 import { SaltaPayHeader } from '@/components/saltapay-header'
 import { TouristView } from '@/components/tourist-view'
 import { HotelPanel } from '@/components/hotel-panel'
@@ -29,7 +30,15 @@ export default function Page() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="tourist" className="mt-6">
-            <TouristView onPaymentComplete={handlePaymentComplete} />
+            <Suspense
+              fallback={
+                <Card className="p-8 text-center">
+                  <p className="text-sm text-muted-foreground">Abriendo checkout turista...</p>
+                </Card>
+              }
+            >
+              <TouristView onPaymentComplete={handlePaymentComplete} />
+            </Suspense>
           </TabsContent>
           <TabsContent value="hotel" className="mt-6">
             <HotelPanel payments={payments} />

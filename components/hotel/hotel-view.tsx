@@ -221,6 +221,10 @@ export function HotelView() {
     fetchPayments({ filters: { localidad: "", status: "all", currency: "all" } })
   }
 
+  const handleRefreshClick = () => {
+    void fetchPayments()
+  }
+
   const removeFilter = (key: keyof AppliedFilters) => {
     if (key === "localidad") {
       setLocalidadInput("")
@@ -255,7 +259,7 @@ export function HotelView() {
           <h2 className="text-2xl font-bold">Hotel Cerro San Bernardo</h2>
           <p className="text-muted-foreground">Panel de pagos - Salta Capital</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchPayments} disabled={isLoading}>
+        <Button variant="outline" size="sm" onClick={handleRefreshClick} disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
           Actualizar
         </Button>
@@ -307,7 +311,7 @@ export function HotelView() {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" onClick={fetchPayments} disabled={isLoading}>
+          <Button variant="outline" onClick={handleRefreshClick} disabled={isLoading}>
             Aplicar filtros
           </Button>
 

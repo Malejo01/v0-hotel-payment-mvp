@@ -3,10 +3,11 @@ import { braga } from "@arkiv-network/sdk/chains"
 import { privateKeyToAccount } from "@arkiv-network/sdk/accounts"
 import { jsonToPayload, ExpirationTime } from "@arkiv-network/sdk/utils"
 import type { ArkivReceiptPayload } from "@/types/pay"
+import { getEnvValue } from "@/lib/runtime-env"
 
 // Server-only - creates wallet client with private key from env
 function createArkivWalletClient() {
-  const privateKey = process.env.ARKIV_PRIVATE_KEY
+  const privateKey = getEnvValue("ARKIV_PRIVATE_KEY")
   if (!privateKey) {
     throw new Error("ARKIV_PRIVATE_KEY environment variable is required")
   }
@@ -43,6 +44,6 @@ export async function writeReceipt(payload: ArkivReceiptPayload): Promise<{
 
   return {
     txHash: result.txHash,
-    entityId: result.entityId,
+    entityId: result.entityKey,
   }
 }

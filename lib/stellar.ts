@@ -1,4 +1,5 @@
 import * as StellarSdk from '@stellar/stellar-sdk'
+import { getEnvValue } from '@/lib/runtime-env'
 
 // Stellar Testnet configuration
 export const HORIZON_URL = 'https://horizon-testnet.stellar.org'
@@ -6,22 +7,50 @@ export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET
 
 // Get hotel public key from environment (read at runtime)
 export function getHotelPublicKey(): string {
-  return process.env.STELLAR_HOTEL_PUBLIC_KEY || ''
+  return getEnvValue('STELLAR_HOTEL_PUBLIC_KEY')
 }
 
 // Get tourist secret key from environment (read at runtime)
 export function getTouristSecretKey(): string {
-  return process.env.STELLAR_TOURIST_SECRET_KEY || ''
+  const configuredValue = getEnvValue('STELLAR_TOURIST_SECRET_KEY')
+  return StellarSdk.StrKey.isValidEd25519SecretSeed(configuredValue) ? configuredValue : ''
+}
+
+export function getTouristSourceAccount(): string {
+  const publicKey = getEnvValue('STELLAR_TOURIST_PUBLIC_KEY') || getEnvValue('STELLAR_TOURIST_SECRET_KEY')
+
+  if (StellarSdk.StrKey.isValidEd25519PublicKey(publicKey)) {
+    return publicKey
+  }
+
+  if (StellarSdk.StrKey.isValidEd25519SecretSeed(publicKey)) {
+    return StellarSdk.Keypair.fromSecret(publicKey).publicKey()
+  }
+
+  return ''
 }
 
 // For backwards compatibility (but reads dynamically now)
-export const HOTEL_PUBLIC_KEY = process.env.STELLAR_HOTEL_PUBLIC_KEY || ''
+export const HOTEL_PUBLIC_KEY = getEnvValue('STELLAR_HOTEL_PUBLIC_KEY')
 
 // Validate that required env vars are set
+export function validateHotelConfig(): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  if (!getEnvValue('STELLAR_HOTEL_PUBLIC_KEY')) missing.push('STELLAR_HOTEL_PUBLIC_KEY')
+  return { valid: missing.length === 0, missing }
+}
+
+export function validatePaymentIntentConfig(): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  if (!getEnvValue('STELLAR_HOTEL_PUBLIC_KEY')) missing.push('STELLAR_HOTEL_PUBLIC_KEY')
+  if (!getTouristSourceAccount()) missing.push('STELLAR_TOURIST_PUBLIC_KEY or STELLAR_TOURIST_SECRET_KEY')
+  return { valid: missing.length === 0, missing }
+}
+
 export function validateStellarConfig(): { valid: boolean; missing: string[] } {
   const missing: string[] = []
-  if (!process.env.STELLAR_HOTEL_PUBLIC_KEY) missing.push('STELLAR_HOTEL_PUBLIC_KEY')
-  if (!process.env.STELLAR_TOURIST_SECRET_KEY) missing.push('STELLAR_TOURIST_SECRET_KEY')
+  if (!getEnvValue('STELLAR_HOTEL_PUBLIC_KEY')) missing.push('STELLAR_HOTEL_PUBLIC_KEY')
+  if (!getEnvValue('STELLAR_TOURIST_SECRET_KEY')) missing.push('STELLAR_TOURIST_SECRET_KEY')
   return { valid: missing.length === 0, missing }
 }
 
@@ -44,6 +73,17 @@ export interface StellarPaymentReceipt {
   status: 'confirmed' | 'failed'
 }
 
+export interface StellarPaymentIntent {
+  sep7Url: string
+  xdr: string
+  sourceAccount: string
+  destinationAccount: string
+  expectedAmount: string
+  memo: string
+  callbackUrl: string
+  message: string
+}
+
 export interface HotelStats {
   totalReceivedARS: number
   paymentCount: number
@@ -55,11 +95,78 @@ export interface PaymentRequest {
   originCurrency: CurrencyCode
   originAmount: number
   usdcAmount: number
+  sourceAccount?: string
+  sessionId?: string
+}
+
+function resolveTouristSourceAccount(sourceAccount?: string): string {
+  const candidate = sourceAccount?.trim() || getTouristSourceAccount()
+  return StellarSdk.StrKey.isValidEd25519PublicKey(candidate) ? candidate : ''
 }
 
 // Initialize Horizon server
 export function getHorizonServer() {
   return new StellarSdk.Horizon.Server(HORIZON_URL)
+}
+
+function buildSep7CallbackUrl(): string {
+  const baseUrl = getEnvValue('NEXT_PUBLIC_APP_URL').trim() || getEnvValue('VERCEL_URL').trim()
+
+  if (!baseUrl) {
+    return 'http://localhost:3000/api/payments/callback'
+  }
+
+  const normalizedBaseUrl = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`
+  return `${normalizedBaseUrl.replace(/\/$/, '')}/api/payments/callback`
+}
+
+// Build an unsigned transaction for external wallet signing via SEP-0007 QR
+export async function createSep7PaymentIntent(request: PaymentRequest): Promise<StellarPaymentIntent> {
+  const server = getHorizonServer()
+  const hotelKey = getHotelPublicKey()
+  const touristSourceAccount = resolveTouristSourceAccount(request.sourceAccount)
+
+  if (!hotelKey || !touristSourceAccount) {
+    throw new Error('Stellar intent configuration is incomplete')
+  }
+
+  const touristAccount = await server.loadAccount(touristSourceAccount)
+  const memo = `SaltaPay: ${request.arsAmount} ARS`
+  const callbackUrl = buildSep7CallbackUrl()
+  const message = `Hotel Cerro San Bernardo · ${request.arsAmount} ARS`
+
+  const transaction = new StellarSdk.TransactionBuilder(touristAccount, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      StellarSdk.Operation.payment({
+        destination: hotelKey,
+        asset: StellarSdk.Asset.native(),
+        amount: request.usdcAmount.toFixed(7),
+      })
+    )
+    .addMemo(StellarSdk.Memo.text(memo))
+    .setTimeout(300)
+    .build()
+
+  const xdr = transaction.toXDR()
+  const sep7Url =
+    `web+stellar:tx?xdr=${encodeURIComponent(xdr)}` +
+    `&network_passphrase=${encodeURIComponent(NETWORK_PASSPHRASE)}` +
+    `&callback=${encodeURIComponent(`url:${callbackUrl}`)}` +
+    `&msg=${encodeURIComponent(message)}`
+
+  return {
+    sep7Url,
+    xdr,
+    sourceAccount: touristSourceAccount,
+    destinationAccount: hotelKey,
+    expectedAmount: request.usdcAmount.toFixed(7),
+    memo,
+    callbackUrl,
+    message,
+  }
 }
 
 // Fetch payments for hotel account from Horizon

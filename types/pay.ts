@@ -1,4 +1,4 @@
-export type CurrencyCode = "ARS" | "USD" | "BRL" | "USDC" | "CRYPTO"
+export type CurrencyCode = "ARS" | "USD" | "BRL" | "USDC" | "CRYPTO" | "EUR" | "CLP" | "BOB" | "GBP"
 
 export const PAY_TRACK = "salta-pay-tourist" as const
 export type PayTrack = typeof PAY_TRACK
@@ -16,6 +16,20 @@ export type PaymentStatus =
   | "arkiv_signing"
   | "confirmed"
   | "failed"
+
+export type PaymentSessionStatus = "draft" | "opened" | "completed" | "expired"
+
+export interface PaymentSession {
+  sessionId: string
+  hotelId: string
+  hotelNombre: string
+  localidad: string
+  montoARS: number
+  createdAt: string
+  expiresAt: string
+  status: PaymentSessionStatus
+  sourceCurrency?: CurrencyCode
+}
 
 export interface HotelContext {
   hotelId: string
@@ -163,6 +177,10 @@ export const EXCHANGE_RATES: Record<CurrencyCode, number> = {
   BRL: 0.18,
   USDC: 1.0,
   CRYPTO: 1.0,
+  EUR: 1.08,
+  CLP: 0.00105,
+  BOB: 0.145,
+  GBP: 1.27,
 }
 
 export const ARS_PER_USDC = 1250

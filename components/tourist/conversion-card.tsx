@@ -24,6 +24,10 @@ export function ConversionCard({ sourceCurrency, montoARS }: ConversionCardProps
     ARS: "$",
     USDC: "",
     CRYPTO: "",
+    EUR: "€",
+    CLP: "$",
+    BOB: "Bs",
+    GBP: "£",
   }
 
   return (
