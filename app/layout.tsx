@@ -1,33 +1,48 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Manrope, IBM_Plex_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+})
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-plex-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: 'Puna Tech Arkiv - Pagos Turisticos',
-  description: 'Sistema de pagos para turistas con blockchain Arkiv - Hackathon Salta 2026',
+  title: 'SaltaPay — Pagos en stablecoin para el turismo de Salta',
+  description:
+    'SaltaPay permite a los turistas pagar en su moneda de origen y a los comercios de Salta recibir pesos al instante, con stablecoins sobre la red Stellar. Rápido, seguro y sin intermediarios bancarios.',
   generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+  keywords: [
+    'SaltaPay',
+    'Stellar',
+    'USDC',
+    'stablecoin',
+    'pagos',
+    'Salta',
+    'turismo',
+    'cripto',
+  ],
+  openGraph: {
+    title: 'SaltaPay — Pagos en stablecoin para el turismo de Salta',
+    description:
+      'Pagá en tu moneda, el hotel recibe pesos al instante. Stablecoins sobre Stellar.',
+    type: 'website',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#b8542e',
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({
@@ -36,10 +51,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es">
-      <body className="font-sans antialiased bg-background">
+    <html lang="es" className="bg-background">
+      <body className={`${manrope.variable} ${plexMono.variable} font-sans antialiased`}>
         {children}
-        <Toaster />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
